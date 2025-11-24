@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dynamic Bubble Map</title>
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<!-- Leaflet JS -->
+<script
+  src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+  integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+  crossorigin=""
+></script>
+
+<!-- PapaParse (CSV 파서) -->
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<script>
+  // 1) 지도 생성
+  const map = L.map('map').setView([30, 0], 2); // 초기 중심과 줌 레벨
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  // 2) Count + Zoom 기반 반경 계산 함수
+  function getRadius(count, zoom) {
+    const c = Number(count) || 0;
+
+    // Count가 너무 크면 sqrt로 완화
+    const base = Math.sqrt(c);
+
+    // 줌에 따라 약간씩 커지도록 (튜닝 가능)
+    const zoomFactor = Math.pow(2, (zoom - 3) * 0.25);
+
+    // 마지막 상수는 전체 크기 스케일
+    return base * zoomFactor;
+  }
+
+  // 3) 원(circleMarker)들을 저장할 배열
+  const circles = [];
+
+  // 4) CSV 파일 로드 (같은 폴더의 data.csv)
+  Papa.parse('data.csv', {
+    download: true,
+    header: true,
+    dynamicTyping: true,
+    complete: function (results) {
+      const rows = results.data;
+
+      rows.forEach(row => {
+        const lat = parseFloat(row.latitude);
+        const lng = parseFloat(row.longitude);
+        const count = row.Count;
+
+        // 위도/경도 유효성 체크
+        if (isNaN(lat) || isNaN(lng)) return;
+
+        const zoom = map.getZoom();
+        const radius = getRadius(count, zoom);
+
+        const circle = L.circleMarker([lat, lng], {
+          radius: radius,
+          fillColor: "#ff7800",
+          color: "#000000",
+          weight: 1,
+          opacity: 1,
+          fillOpacity: 0.5
+        }).addTo(map);
+
+        circle.bindPopup(
+          `<b>${row.University}</b><br>` +
+          `${row.Country}<br>` +
+          `Count: ${count}`
+        );
+
+        // Count 값을 나중에 다시 쓰기 위해 저장
+        circle._dataCount = count;
+
+        circles.push(circle);
+      });
+    }
+  });
+
+  // 5) 줌 변경 시 동적으로 버블 크기 재계산
+  map.on('zoomend', () => {
+    const zoom = map.getZoom();
+    circles.forEach(circle => {
+      const newRadius = getRadius(circle._dataCount, zoom);
+      circle.setRadius(newRadius);
+    });
+  });
+</script>
+
+</body>
+</html>
