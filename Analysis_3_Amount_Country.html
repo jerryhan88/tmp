@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        body { margin: 0; padding: 10px; background-color: #fff; overflow: hidden; }
+        .chart-wrapper { height: 450px; width: 100%; }
+    </style>
+</head>
+<body>
+    <div class="chart-wrapper"><canvas id="chart"></canvas></div>
+    <script>
+        const countryColorMap = {
+            'United States of America (USA)': 'rgba(255, 99, 132, 0.8)',
+            'United States': 'rgba(255, 99, 132, 0.8)',
+            'Germany': 'rgba(255, 206, 86, 0.8)',
+            'China': 'rgba(54, 162, 235, 0.8)',
+            'Japan': '#4bc0c0', 'United Kingdom': '#9966ff', 'India': '#ff9f40', 'Others': '#bdc3c7'
+        };
+        const palette = ['#4bc0c0', '#9966ff', '#ff9f40', '#ea7ccc', '#72b01d'];
+
+        fetch('data_a.csv').then(res => res.text()).then(csv => {
+            const raw = Papa.parse(csv, {header:true, dynamicTyping:true, skipEmptyLines:true}).data;
+            const countryTotals = {};
+            raw.forEach(d => { if(d.Country) countryTotals[d.Country] = (countryTotals[d.Country] || 0) + (d.Amount || 0); });
+            const top10 = Object.entries(countryTotals).sort((a,b)=>b[1]-a[1]).slice(0, 10).map(x => x[0]);
+            
+            const agg = {}; const years = new Set();
+            raw.forEach(d => {
+                if(!d.Year) return; years.add(d.Year);
+                const label = top10.includes(d.Country) ? d.Country : 'Others';
+                if(!agg[d.Year]) agg[d.Year] = {};
+                agg[d.Year][label] = (agg[d.Year][label] || 0) + (d.Amount || 0);
+            });
+            const sortedYears = Array.from(years).sort((a,b)=>a-b);
+            const labels = [...top10, 'Others'];
+
+            const datasets = labels.map((l, i) => ({
+                label: l, data: sortedYears.map(y => agg[y][l] || 0),
+                backgroundColor: countryColorMap[l] || palette[i % palette.length]
+            }));
+
+            new Chart(document.getElementById('chart'), {
+                type: 'bar',
+                data: { labels: sortedYears, datasets: datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top', labels: { usePointStyle: true } }, tooltip: { mode: 'index', intersect: false } },
+                    scales: { x: { stacked: true }, y: { stacked: true, title: { display: true, text: 'Number' }, ticks: { callback: v => v.toLocaleString() } } }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

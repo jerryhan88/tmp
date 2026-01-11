@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body { margin: 0; padding: 0; font-family: sans-serif; background-color: #fff; }
+    .controls { 
+      position: absolute; top: 10px; right: 10px; z-index: 1000; 
+      background: white; padding: 10px; border-radius: 8px; 
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 10px;
+    }
+    #map { width: 100%; height: 500px; }
+    label { font-weight: bold; font-size: 0.9em; color: #555; }
+    select { padding: 5px; border-radius: 4px; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+
+<div class="controls">
+    <label>Select Year: </label>
+    <select id="yearSelect"></select>
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<script>
+  let allData = [];
+  let circles = [];
+  const map = L.map('map').setView([20, 0], 2);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+
+  function getRadius(count, zoom) {
+    const c = Number(count) || 0;
+    const base = Math.sqrt(c);
+    const zoomFactor = Math.pow(2, (zoom - 3) * 0.4);
+    return base * zoomFactor;
+  }
+
+  Papa.parse('data_c.csv', {
+    download: true,
+    header: true,
+    dynamicTyping: true,
+    complete: function (results) {
+      allData = results.data.filter(d => d.Year && d.latitude && d.longitude);
+      const years = Array.from(new Set(allData.map(d => d.Year))).sort((a,b) => b-a);
+      const select = document.getElementById('yearSelect');
+      years.forEach(y => {
+        const opt = document.createElement('option');
+        opt.value = y; opt.innerText = y;
+        select.appendChild(opt);
+      });
+      updateMap();
+      select.addEventListener('change', updateMap);
+    }
+  });
+
+  function updateMap() {
+    const selectedYear = parseInt(document.getElementById('yearSelect').value);
+    circles.forEach(c => map.removeLayer(c));
+    circles = [];
+    const filtered = allData.filter(d => d.Year === selectedYear);
+    const zoom = map.getZoom();
+
+    filtered.forEach(row => {
+      const radius = getRadius(row.Count, zoom);
+      const circle = L.circleMarker([row.latitude, row.longitude], {
+        radius: radius,
+        // **변경된 색상 설정 (연한 오렌지색)**
+        fillColor: "#FF8C00", // DarkOrange 계열
+        color: "#B22222",     // FireBrick (테두리)
+        weight: 1,
+        opacity: 0.8,
+        fillOpacity: 0.5
+      }).addTo(map);
+
+      circle.bindPopup(
+        `<b>${row.University || 'Unknown'}</b><br>` +
+        `${row.Country}<br>` +
+        `Number: ${row.Count}`
+      );
+      circle._dataCount = row.Count;
+      circles.push(circle);
+    });
+  }
+
+  map.on('zoomend', () => {
+    const zoom = map.getZoom();
+    circles.forEach(circle => {
+      const newRadius = getRadius(circle._dataCount, zoom);
+      circle.setRadius(newRadius);
+    });
+  });
+</script>
+</body>
+</html>

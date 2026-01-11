@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        body { margin: 0; padding: 10px 20px; background-color: #fff; font-family: sans-serif; overflow: hidden; }
+        .controls { display: flex; gap: 15px; margin-bottom: 10px; justify-content: center; align-items: center; background: #f8f9fa; padding: 10px; border-radius: 8px; border: 1px solid #eee; }
+        .chart-container { display: flex; gap: 10px; justify-content: space-around; flex-wrap: nowrap; }
+        .pie-box { flex: 1; min-width: 250px; text-align: center; }
+        .pie-wrapper { height: 320px; position: relative; } /* 높이 최적화 */
+        select, input { padding: 5px; border-radius: 4px; border: 1px solid #ccc; }
+        h4 { margin: 10px 0; color: #444; font-size: 0.95rem; }
+        label { font-weight: bold; font-size: 0.85em; color: #666; }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <div><label>Year: </label><select id="yearSelect"></select></div>
+        <div><label>Top N: </label><input type="number" id="topNInput" value="5" min="1" max="20" style="width: 45px;"></div>
+    </div>
+
+    <div class="chart-container">
+        <div class="pie-box">
+            <h4>Analysis V-A (Amount)</h4>
+            <div class="pie-wrapper"><canvas id="amountPie"></canvas></div>
+        </div>
+        <div class="pie-box">
+            <h4>Analysis V-B (Count)</h4>
+            <div class="pie-wrapper"><canvas id="countPie"></canvas></div>
+        </div>
+    </div>
+
+    <script>
+        let dataA = [], dataC = [];
+        let amountChart = null, countChart = null;
+
+        const countryColorMap = {
+            'United States of America (USA)': 'rgba(255, 99, 132, 0.8)',
+            'United States': 'rgba(255, 99, 132, 0.8)',
+            'Germany': 'rgba(255, 206, 86, 0.8)',
+            'China': 'rgba(54, 162, 235, 0.8)',
+            'Japan': 'rgba(75, 192, 192, 0.8)',
+            'United Kingdom': 'rgba(153, 102, 255, 0.8)',
+            'India': 'rgba(255, 159, 64, 0.8)',
+            'Others': 'rgba(200, 200, 200, 0.8)'
+        };
+        const palette = ['rgba(75, 192, 192, 0.8)', 'rgba(153, 102, 255, 0.8)', 'rgba(255, 159, 64, 0.8)', 'rgba(201, 203, 207, 0.8)', 'rgba(54, 162, 235, 0.8)'];
+
+        Promise.all([
+            fetch('data_a.csv').then(res => res.text()),
+            fetch('data_c.csv').then(res => res.text())
+        ]).then(([csvA, csvC]) => {
+            dataA = Papa.parse(csvA, {header:true, dynamicTyping:true, skipEmptyLines:true}).data;
+            dataC = Papa.parse(csvC, {header:true, dynamicTyping:true, skipEmptyLines:true}).data;
+
+            const years = Array.from(new Set([...dataA.map(d => d.Year), ...dataC.map(d => d.Year)])).filter(y => y).sort((a,b) => b-a);
+            const select = document.getElementById('yearSelect');
+            years.forEach(y => { const opt = document.createElement('option'); opt.value = y; opt.innerText = y; select.appendChild(opt); });
+
+            updateCharts();
+            select.addEventListener('change', updateCharts);
+            document.getElementById('topNInput').addEventListener('change', updateCharts);
+        });
+
+        function updateCharts() {
+            const year = parseInt(document.getElementById('yearSelect').value);
+            const topN = parseInt(document.getElementById('topNInput').value) || 5;
+            renderPie('amountPie', dataA, year, topN, 'Amount', amountChart, (c) => amountChart = c);
+            renderPie('countPie', dataC, year, topN, 'Count', countChart, (c) => countChart = c);
+        }
+
+        function renderPie(canvasId, rawData, targetYear, n, valCol, chartInstance, setChartInstance) {
+            const filtered = rawData.filter(d => d.Year === targetYear && d.Country);
+            const countryAgg = {};
+            filtered.forEach(d => { countryAgg[d.Country] = (countryAgg[d.Country] || 0) + (d[valCol] || 0); });
+            const sorted = Object.entries(countryAgg).sort((a,b) => b[1] - a[1]);
+            const topCountries = sorted.slice(0, n);
+            const othersSum = sorted.slice(n).reduce((sum, curr) => sum + curr[1], 0);
+
+            const labels = topCountries.map(x => x[0]);
+            const values = topCountries.map(x => x[1]);
+            const backgroundColors = labels.map((l, i) => countryColorMap[l] || palette[i % palette.length]);
+
+            if (othersSum > 0) {
+                labels.push('Others');
+                values.push(othersSum);
+                backgroundColors.push('rgba(200, 200, 200, 0.8)');
+            }
+
+            const ctx = document.getElementById(canvasId).getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+
+            const newChart = new Chart(ctx, {
+                type: 'pie',
+                data: { labels: labels, datasets: [{ data: values, backgroundColor: backgroundColors, borderWidth: 1, borderColor: '#fff' }] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 10 }, padding: 10 } },
+                        tooltip: { callbacks: { label: (ctx) => ` ${ctx.label}: ${ctx.parsed.toLocaleString()}` } }
+                    }
+                }
+            });
+            setChartInstance(newChart);
+        }
+    </script>
+</body>
+</html>

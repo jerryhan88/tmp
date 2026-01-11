@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integrated Data Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 40px; background-color: #f0f2f5; }
+        h1 { color: #1a1a1a; margin-bottom: 40px; }
+        
+        .analysis-block { width: 95%; max-width: 1100px; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px; overflow: hidden; border: 1px solid #e0e4e8; }
+        
+        summary { padding: 22px 25px; font-size: 1.2rem; font-weight: 600; color: #2c3e50; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; background-color: #ffffff; }
+        summary:hover { background-color: #f8f9fa; }
+        summary::after { content: '▼'; font-size: 0.8rem; color: #95a5a6; transition: transform 0.3s; }
+        details[open] summary::after { transform: rotate(180deg); }
+        
+        .iframe-wrapper { width: 100%; border-top: 1px solid #f0f0f0; overflow: hidden; background-color: #fff; }
+        iframe { width: 100%; border: none; display: block; height: 0; transition: height 0.2s; }
+    </style>
+</head>
+<body>
+
+    <h1>Data Analysis Dashboard</h1>
+
+    <details class="analysis-block" open>
+        <summary>Analysis I (Amount by Region)</summary>
+        <div class="iframe-wrapper"><iframe src="Analysis_1_Amount_Region.html" scrolling="no" onload="resizeIframe(this)"></iframe></div>
+    </details>
+
+    <details class="analysis-block" open>
+        <summary>Analysis II (Count by Region)</summary>
+        <div class="iframe-wrapper"><iframe src="Analysis_2_Count_Region.html" scrolling="no" onload="resizeIframe(this)"></iframe></div>
+    </details>
+
+    <details class="analysis-block">
+        <summary>Analysis III (Amount by Country)</summary>
+        <div class="iframe-wrapper"><iframe src="Analysis_3_Amount_Country.html" scrolling="no" onload="resizeIframe(this)"></iframe></div>
+    </details>
+
+    <details class="analysis-block">
+        <summary>Analysis IV (Count by Country)</summary>
+        <div class="iframe-wrapper"><iframe src="Analysis_4_Count_Country.html" scrolling="no" onload="resizeIframe(this)"></iframe></div>
+    </details>
+    
+    <details class="analysis-block" id="block-analysis-5">
+        <summary>Analysis V (Distribution Comparison)</summary>
+        <div class="iframe-wrapper">
+            <iframe src="Analysis_5_Pie_Charts.html" scrolling="no" onload="resizeIframe(this)"></iframe>
+        </div>
+    </details>
+
+    <details class="analysis-block" open>
+        <summary>Analysis VI (Geographic Distribution)</summary>
+        <div class="iframe-wrapper">
+            <iframe src="Analysis_6_Map_Bubble.html" scrolling="no" onload="resizeIframe(this)"></iframe>
+        </div>
+    </details>
+
+    <script>
+        function resizeIframe(obj) {
+            try {
+                if (obj.contentWindow.document.documentElement.scrollHeight > 0) {
+                    obj.style.height = (obj.contentWindow.document.documentElement.scrollHeight) + 'px';
+                }
+            } catch (e) {
+                obj.style.height = '500px'; 
+            }
+        }
+
+        // 블록이 열릴 때 높이를 다시 계산하여 여백 문제 해결
+        document.querySelectorAll('details').forEach((el) => {
+            el.addEventListener('toggle', () => {
+                if (el.open) {
+                    const iframe = el.querySelector('iframe');
+                    if (iframe) resizeIframe(iframe);
+                }
+            });
+        });
+
+        window.addEventListener('resize', () => {
+            document.querySelectorAll('iframe').forEach(iframe => resizeIframe(iframe));
+        });
+    </script>
+</body>
+</html>

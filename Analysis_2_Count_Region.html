@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <style>
+        body { margin: 0; padding: 10px; background-color: #fff; overflow: hidden; }
+        .chart-wrapper { height: 450px; width: 100%; }
+    </style>
+</head>
+<body>
+    <div class="chart-wrapper"><canvas id="chart"></canvas></div>
+    <script>
+        const preferredOrder = ['AMS', 'EMEA', 'APJ'];
+        const colorMap = {
+            'AMS': 'rgba(255, 99, 132, 0.85)',
+            'EMEA': 'rgba(255, 206, 86, 0.85)',
+            'APJ': 'rgba(54, 162, 235, 0.85)',
+            'Default': 'rgba(201, 203, 207, 0.85)'
+        };
+
+        fetch('data_c.csv').then(res => res.text()).then(csv => {
+            const raw = Papa.parse(csv, {header:true, dynamicTyping:true, skipEmptyLines:true}).data;
+            const agg = {}; const years = new Set(); const regs = new Set();
+            raw.forEach(d => {
+                if(!d.Year || !d.Region) return;
+                years.add(d.Year); regs.add(d.Region);
+                if(!agg[d.Year]) agg[d.Year] = {};
+                agg[d.Year][d.Region] = (agg[d.Year][d.Region] || 0) + (d.Count || 0);
+            });
+            const sortedYears = Array.from(years).sort((a,b)=>a-b);
+            const sortedRegs = preferredOrder.filter(r => regs.has(r));
+            regs.forEach(r => { if(!preferredOrder.includes(r)) sortedRegs.push(r); });
+
+            const datasets = sortedRegs.map(r => ({
+                label: r, data: sortedYears.map(y => agg[y][r] || 0),
+                backgroundColor: colorMap[r] || colorMap['Default']
+            }));
+
+            new Chart(document.getElementById('chart'), {
+                type: 'bar',
+                data: { labels: sortedYears, datasets: datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top', labels: { usePointStyle: true } }, tooltip: { mode: 'index', intersect: false } },
+                    scales: { x: { stacked: true }, y: { stacked: true, title: { display: true, text: 'Number' }, ticks: { callback: v => v.toLocaleString() } } }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
