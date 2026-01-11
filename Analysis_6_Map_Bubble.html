@@ -2,24 +2,34 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <title>Analysis VI - Geographic Distribution Slider</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     body { margin: 0; padding: 0; font-family: sans-serif; background-color: #fff; }
+    
+    /* 슬라이더 컨트롤 디자인 */
     .controls { 
-      position: absolute; top: 10px; right: 10px; z-index: 1000; 
-      background: white; padding: 10px; border-radius: 8px; 
-      box-shadow: 0 2px 10px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 10px;
+      position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 1000; 
+      background: rgba(255, 255, 255, 0.95); padding: 15px 25px; border-radius: 50px; 
+      box-shadow: 0 4px 15px rgba(0,0,0,0.15); display: flex; flex-direction: column; align-items: center; gap: 8px;
+      width: 80%; max-width: 600px; border: 1px solid #ddd;
     }
-    #map { width: 100%; height: 500px; }
-    label { font-weight: bold; font-size: 0.9em; color: #555; }
-    select { padding: 5px; border-radius: 4px; border: 1px solid #ccc; }
+    .slider-header { display: flex; justify-content: space-between; width: 100%; align-items: center; }
+    #yearDisplay { font-size: 1.4rem; font-weight: bold; color: #d35400; min-width: 80px; text-align: center; }
+    
+    input[type=range] { width: 100%; cursor: pointer; accent-color: #FF8C00; }
+    #map { width: 100%; height: 550px; }
+    label { font-weight: bold; font-size: 0.9em; color: #555; text-transform: uppercase; letter-spacing: 1px; }
   </style>
 </head>
 <body>
 
 <div class="controls">
-    <label>Select Year: </label>
-    <select id="yearSelect"></select>
+    <div class="slider-header">
+        <label>Time Exploration</label>
+        <span id="yearDisplay">-</span>
+    </div>
+    <input type="range" id="yearSlider" min="0" max="0" value="0" step="1">
 </div>
 
 <div id="map"></div>
@@ -30,67 +40,91 @@
 <script>
   let allData = [];
   let circles = [];
-  const map = L.map('map').setView([20, 0], 2);
+  const map = L.map('map', {
+    scrollWheelZoom: false // 대시보드 내 스크롤 간섭 방지
+  }).setView([25, 10], 2);
 
+  // 기본 지도 레이어 설정
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 18,
     attribution: '&copy; OpenStreetMap'
   }).addTo(map);
 
+  // 수량에 따른 버블 크기 계산
   function getRadius(count, zoom) {
     const c = Number(count) || 0;
     const base = Math.sqrt(c);
-    const zoomFactor = Math.pow(2, (zoom - 3) * 0.4);
+    const zoomFactor = Math.pow(2, (zoom - 3) * 0.45);
     return base * zoomFactor;
   }
 
+  // 데이터 로드 (data_c.csv 사용)
   Papa.parse('data_c.csv', {
     download: true,
     header: true,
     dynamicTyping: true,
     complete: function (results) {
       allData = results.data.filter(d => d.Year && d.latitude && d.longitude);
-      const years = Array.from(new Set(allData.map(d => d.Year))).sort((a,b) => b-a);
-      const select = document.getElementById('yearSelect');
-      years.forEach(y => {
-        const opt = document.createElement('option');
-        opt.value = y; opt.innerText = y;
-        select.appendChild(opt);
+      
+      const years = Array.from(new Set(allData.map(d => d.Year))).sort((a,b) => a - b);
+      if (years.length === 0) return;
+
+      const minYear = years[0];
+      const maxYear = years[years.length - 1];
+
+      const slider = document.getElementById('yearSlider');
+      const display = document.getElementById('yearDisplay');
+
+      slider.min = minYear;
+      slider.max = maxYear;
+      slider.value = maxYear; 
+      display.innerText = maxYear;
+
+      updateMap(maxYear);
+
+      slider.addEventListener('input', function() {
+        display.innerText = this.value;
+        updateMap(parseInt(this.value));
       });
-      updateMap();
-      select.addEventListener('change', updateMap);
     }
   });
 
-  function updateMap() {
-    const selectedYear = parseInt(document.getElementById('yearSelect').value);
+  function updateMap(selectedYear) {
+    // 기존 버블 제거
     circles.forEach(c => map.removeLayer(c));
     circles = [];
+
     const filtered = allData.filter(d => d.Year === selectedYear);
     const zoom = map.getZoom();
 
     filtered.forEach(row => {
       const radius = getRadius(row.Count, zoom);
+
       const circle = L.circleMarker([row.latitude, row.longitude], {
         radius: radius,
-        // **변경된 색상 설정 (연한 오렌지색)**
-        fillColor: "#FF8C00", // DarkOrange 계열
-        color: "#B22222",     // FireBrick (테두리)
-        weight: 1,
-        opacity: 0.8,
+        // **요청하신 연한 오렌지색 통일 설정**
+        fillColor: "#FF8C00", // 메인 오렌지색
+        color: "#E67E22",     // 약간 더 진한 오렌지 테두리
+        weight: 1.5,
+        opacity: 0.9,
         fillOpacity: 0.5
       }).addTo(map);
 
+      // 정보 팝업 (보안을 위해 Number로 표기)
       circle.bindPopup(
-        `<b>${row.University || 'Unknown'}</b><br>` +
-        `${row.Country}<br>` +
-        `Number: ${row.Count}`
+        `<div style="font-family: sans-serif;">
+          <b style="font-size:1.1em; color:#d35400;">${row.University || 'Unknown'}</b><br>
+          <span style="color:#7f8c8d;">${row.Country}</span><hr style="margin:5px 0; border:0; border-top:1px solid #eee;">
+          <b>Number:</b> ${row.Count.toLocaleString()}
+        </div>`
       );
+
       circle._dataCount = row.Count;
       circles.push(circle);
     });
   }
 
+  // 줌 변경 시 버블 크기 실시간 재조정
   map.on('zoomend', () => {
     const zoom = map.getZoom();
     circles.forEach(circle => {
