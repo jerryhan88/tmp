@@ -1,86 +1,137 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Integrated Data Dashboard</title>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; align-items: center; padding: 40px; background-color: #f0f2f5; }
-        h1 { color: #1a1a1a; margin-bottom: 40px; }
-        
-        .analysis-block { width: 95%; max-width: 1100px; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px; overflow: hidden; border: 1px solid #e0e4e8; }
-        
-        summary { padding: 22px 25px; font-size: 1.2rem; font-weight: 600; color: #2c3e50; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; background-color: #ffffff; }
-        summary:hover { background-color: #f8f9fa; }
-        summary::after { content: '▼'; font-size: 0.8rem; color: #95a5a6; transition: transform 0.3s; }
-        details[open] summary::after { transform: rotate(180deg); }
-        
-        .iframe-wrapper { width: 100%; border-top: 1px solid #f0f0f0; overflow: hidden; background-color: #fff; }
-        iframe { width: 100%; border: none; display: block; height: 0; transition: height 0.2s; }
-    </style>
+  <meta charset="UTF-8" />
+  <title>Analysis VI - Geographic Distribution Slider</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body { margin: 0; padding: 0; font-family: sans-serif; background-color: #fff; }
+    
+    /* 슬라이더 컨트롤 디자인 */
+    .controls { 
+      position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 1000; 
+      background: rgba(255, 255, 255, 0.95); padding: 15px 25px; border-radius: 50px; 
+      box-shadow: 0 4px 15px rgba(0,0,0,0.15); display: flex; flex-direction: column; align-items: center; gap: 8px;
+      width: 80%; max-width: 600px; border: 1px solid #ddd;
+    }
+    .slider-header { display: flex; justify-content: space-between; width: 100%; align-items: center; }
+    #yearDisplay { font-size: 1.4rem; font-weight: bold; color: #d35400; min-width: 80px; text-align: center; }
+    
+    input[type=range] { width: 100%; cursor: pointer; accent-color: #FF8C00; }
+    #map { width: 100%; height: 550px; }
+    label { font-weight: bold; font-size: 0.9em; color: #555; text-transform: uppercase; letter-spacing: 1px; }
+  </style>
 </head>
 <body>
 
-    <h1>Data Analysis Dashboard</h1>
+<div class="controls">
+    <div class="slider-header">
+        <label>Time Exploration</label>
+        <span id="yearDisplay">-</span>
+    </div>
+    <input type="range" id="yearSlider" min="0" max="0" value="0" step="1">
+</div>
 
-    <details class="analysis-block" open>
-        <summary>Analysis I (Amount by Region)</summary>
-        <div class="iframe-wrapper"><iframe src="Analysis_1_Amount_Region.html" scrolling="no" onload="resizeIframe(this)"></iframe></div>
-    </details>
+<div id="map"></div>
 
-    <details class="analysis-block" open>
-        <summary>Analysis II (Count by Region)</summary>
-        <div class="iframe-wrapper"><iframe src="Analysis_2_Count_Region.html" scrolling="no" onload="resizeIframe(this)"></iframe></div>
-    </details>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
-    <details class="analysis-block">
-        <summary>Analysis III (Amount by Country)</summary>
-        <div class="iframe-wrapper"><iframe src="Analysis_3_Amount_Country.html" scrolling="no" onload="resizeIframe(this)"></iframe></div>
-    </details>
+<script>
+  let allData = [];
+  let circles = [];
+  const map = L.map('map', {
+    scrollWheelZoom: false // 대시보드 내 스크롤 간섭 방지
+  }).setView([25, 10], 2);
 
-    <details class="analysis-block">
-        <summary>Analysis IV (Count by Country)</summary>
-        <div class="iframe-wrapper"><iframe src="Analysis_4_Count_Country.html" scrolling="no" onload="resizeIframe(this)"></iframe></div>
-    </details>
-    
-    <details class="analysis-block" id="block-analysis-5">
-        <summary>Analysis V (Distribution Comparison)</summary>
-        <div class="iframe-wrapper">
-            <iframe src="Analysis_5_Pie_Charts.html" scrolling="no" onload="resizeIframe(this)"></iframe>
-        </div>
-    </details>
+  // 기본 지도 레이어 설정
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
 
-    <details class="analysis-block" open>
-        <summary>Analysis VI (Geographic Distribution)</summary>
-        <div class="iframe-wrapper">
-            <iframe src="Analysis_6_Map_Bubble.html" scrolling="no" onload="resizeIframe(this)"></iframe>
-        </div>
-    </details>
+  // 수량에 따른 버블 크기 계산
+  function getRadius(count, zoom) {
+    const c = Number(count) || 0;
+    const base = Math.sqrt(c);
+    const zoomFactor = Math.pow(2, (zoom - 3) * 0.45);
+    return base * zoomFactor;
+  }
 
-    <script>
-        function resizeIframe(obj) {
-            try {
-                if (obj.contentWindow.document.documentElement.scrollHeight > 0) {
-                    obj.style.height = (obj.contentWindow.document.documentElement.scrollHeight) + 'px';
-                }
-            } catch (e) {
-                obj.style.height = '500px'; 
-            }
-        }
+  // 데이터 로드 (data_c.csv 사용)
+  Papa.parse('data_c.csv', {
+    download: true,
+    header: true,
+    dynamicTyping: true,
+    complete: function (results) {
+      allData = results.data.filter(d => d.Year && d.latitude && d.longitude);
+      
+      const years = Array.from(new Set(allData.map(d => d.Year))).sort((a,b) => a - b);
+      if (years.length === 0) return;
 
-        // 블록이 열릴 때 높이를 다시 계산하여 여백 문제 해결
-        document.querySelectorAll('details').forEach((el) => {
-            el.addEventListener('toggle', () => {
-                if (el.open) {
-                    const iframe = el.querySelector('iframe');
-                    if (iframe) resizeIframe(iframe);
-                }
-            });
-        });
+      const minYear = years[0];
+      const maxYear = years[years.length - 1];
 
-        window.addEventListener('resize', () => {
-            document.querySelectorAll('iframe').forEach(iframe => resizeIframe(iframe));
-        });
-    </script>
+      const slider = document.getElementById('yearSlider');
+      const display = document.getElementById('yearDisplay');
+
+      slider.min = minYear;
+      slider.max = maxYear;
+      slider.value = maxYear; 
+      display.innerText = maxYear;
+
+      updateMap(maxYear);
+
+      slider.addEventListener('input', function() {
+        display.innerText = this.value;
+        updateMap(parseInt(this.value));
+      });
+    }
+  });
+
+  function updateMap(selectedYear) {
+    // 기존 버블 제거
+    circles.forEach(c => map.removeLayer(c));
+    circles = [];
+
+    const filtered = allData.filter(d => d.Year === selectedYear);
+    const zoom = map.getZoom();
+
+    filtered.forEach(row => {
+      const radius = getRadius(row.Count, zoom);
+
+      const circle = L.circleMarker([row.latitude, row.longitude], {
+        radius: radius,
+        // **요청하신 연한 오렌지색 통일 설정**
+        fillColor: "#FF8C00", // 메인 오렌지색
+        color: "#E67E22",     // 약간 더 진한 오렌지 테두리
+        weight: 1.5,
+        opacity: 0.9,
+        fillOpacity: 0.5
+      }).addTo(map);
+
+      // 정보 팝업 (보안을 위해 Number로 표기)
+      circle.bindPopup(
+        `<div style="font-family: sans-serif;">
+          <b style="font-size:1.1em; color:#d35400;">${row.University || 'Unknown'}</b><br>
+          <span style="color:#7f8c8d;">${row.Country}</span><hr style="margin:5px 0; border:0; border-top:1px solid #eee;">
+          <b>Number:</b> ${row.Count.toLocaleString()}
+        </div>`
+      );
+
+      circle._dataCount = row.Count;
+      circles.push(circle);
+    });
+  }
+
+  // 줌 변경 시 버블 크기 실시간 재조정
+  map.on('zoomend', () => {
+    const zoom = map.getZoom();
+    circles.forEach(circle => {
+      const newRadius = getRadius(circle._dataCount, zoom);
+      circle.setRadius(newRadius);
+    });
+  });
+</script>
 </body>
 </html>
